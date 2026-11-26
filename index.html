@@ -1,0 +1,213 @@
+  <!DOCTYPE html>
+  <html lang="zh-HK">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>計劃書海報生成器</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"PingFang HK","PingFang SC","Microsoft JhengHei","Microsoft YaHei","Noto Sans CJK TC",sans-serif;background:#f1f3f6;color:#222}
+    .app{display:flex;flex-wrap:wrap;gap:24px;padding:24px;max-width:1100px;margin:auto}
+    .panel{flex:1 1 300px;background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);align-self:flex-start}
+    .panel h1{font-size:20px;margin:0 0 12px}
+    .panel label{display:block;font-size:13px;color:#555;margin:14px 0 4px}
+    .panel input[type=text],.panel select{width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:14px}
+    .btn{display:block;width:100%;margin-top:18px;padding:12px;border:0;border-radius:8px;background:#c8102e;color:#fff;font-size:16px;cursor:pointer}
+    .btn:disabled{background:#aaa}
+    #msg{margin-top:12px;font-size:13px;line-height:1.5}
+    .ok{color:#18794e}.err{color:#c8102e}
+    .hint{font-size:12px;color:#888;margin-top:14px;line-height:1.6}
+    .stage{flex:0 0 540px;max-width:100%;overflow:auto}
+
+    #poster{width:540px;min-height:760px;padding:36px 32px 24px;position:relative;background-size:cover;background-position:center;display:flex;flex-direction:column}
+    #poster>*{position:relative}
+    .tag{font-size:13px;letter-spacing:4px;opacity:.85}
+    .headline{font-size:34px;font-weight:800;line-height:1.25;margin:10px 0 6px}
+    .plan{font-size:16px;margin-bottom:18px}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+    .chip{font-size:13px;padding:6px 12px;border-radius:999px}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th{font-size:12px;font-weight:600;padding:8px 6px;text-align:right}
+    td{padding:11px 6px;text-align:right;font-variant-numeric:tabular-nums}
+    th:first-child,td:first-child{text-align:left}
+    td small{display:block;font-size:11px;opacity:.7}
+    td.total{font-size:17px;font-weight:800}
+    td.mult{font-size:17px;font-weight:800}
+    .unit{font-size:11px;opacity:.7;text-align:right;margin-top:6px}
+    .spacer{flex:1;min-height:20px}
+    .agent{font-size:14px;font-weight:600;margin-bottom:10px}
+    .disc{font-size:10px;line-height:1.6;opacity:.75}
+
+    .t-gold{background:linear-gradient(160deg,#0d1b3d,#1b2f63 60%,#0d1b3d);color:#fff}
+    .t-gold .headline,.t-gold td.total,.t-gold td.mult{color:#f2cf7e}
+    .t-gold .chip{background:rgba(242,207,126,.15);border:1px solid rgba(242,207,126,.5)}
+    .t-gold th{border-bottom:1px solid rgba(242,207,126,.6);color:#f2cf7e}
+    .t-gold td{border-bottom:1px solid rgba(255,255,255,.12)}
+
+    .t-red{background:linear-gradient(180deg,#fff8f0,#fff);color:#2a2a2a}
+    .t-red .headline,.t-red td.total,.t-red td.mult{color:#c8102e}
+    .t-red .chip{background:#fde8ea;color:#c8102e}
+    .t-red th{border-bottom:2px solid #c8102e;color:#c8102e}
+    .t-red td{border-bottom:1px solid #eee}
+
+    .t-custom{color:#fff;background-color:#333}
+    .t-custom::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55)}
+    .t-custom .chip{background:rgba(255,255,255,.18)}
+    .t-custom th{border-bottom:1px solid rgba(255,255,255,.7)}
+    .t-custom td{border-bottom:1px solid rgba(255,255,255,.2)}
+  </style>
+  </head>
+  <body>
+  <div class="app">
+    <div class="panel">
+      <h1>計劃書海報生成器</h1>
+      <label>1. 上載計劃書 PDF</label>
+      <input type="file" id="pdfFile" accept="application/pdf">
+      <label>2. 選擇模版</label>
+      <select id="theme">
+        <option value="t-gold">深藍金</option>
+        <option value="t-red">簡約紅</option>
+        <option value="t-custom">自訂背景圖</option>
+      </select>
+      <div id="bgWrap" style="display:none">
+        <label>上載背景圖（PNG / JPG）</label>
+        <input type="file" id="bgFile" accept="image/*">
+      </div>
+      <label>3. 展示的保單年度（逗號分隔）</label>
+      <input type="text" id="years" value="10,20,30">
+      <label>海報文字</label>
+      <select id="lang">
+        <option value="tc">繁體</option>
+        <option value="sc">简体</option>
+      </select>
+      <label>顧問姓名／聯絡方式</label>
+      <input type="text" id="agent" placeholder="例如：陳先生 WeChat: xxxx">
+      <button class="btn" id="dl" disabled>下載海報 PNG</button>
+      <div id="msg"></div>
+      <div class="hint">
+        ・PDF 只在你的瀏覽器內處理，不會上載到任何伺服器。<br>
+        ・海報上所有文字都可以直接點擊修改。<br>
+        ・下載前請對照計劃書核對數字。
+      </div>
+    </div>
+    <div class="stage"><div id="poster" class="t-gold"></div></div>
+  </div>
+
+  <script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const $=id=>document.getElementById(id);
+  const fmt=n=>Number(n).toLocaleString('en-US');
+  const num=s=>parseInt(s.replace(/,/g,''),10);
+  let data=null;
+
+  const L={
+    tc:{tag:'儲蓄方案摘要',head:'年繳費 · 財富長期增值',insured:'受保人',age:'歲',annual:'年繳保費',pay:'繳費',yr:'年',totalPaid:'總保費',
+        c1:'保單年度',c2:'保證現金價值',c3:'預期退保總額',c4:'相當於總保費',nth:n=>'第 '+n+' 年',times:'倍',unit:'貨幣單位：',
+        disc:'以上數字摘自計劃書，假設期內沒有提取及貸款。預期退保總額包括非保證的復歸紅利及終期分紅，實際金額可能較所示者為高或低，在某些情況下非保證金額可能為零。本海報僅供參考，並非合約，詳情請參閱完整計劃書、產品簡介及保單條款。',
+        empty:'請先上載計劃書 PDF'},
+    sc:{tag:'储蓄方案摘要',head:'年缴费 · 财富长期增值',insured:'受保人',age:'岁',annual:'年缴保费',pay:'缴费',yr:'年',totalPaid:'总保费',
+        c1:'保单年度',c2:'保证现金价值',c3:'预期退保总额',c4:'相当于总保费',nth:n=>'第 '+n+' 年',times:'倍',unit:'货币单位：',
+        disc:'以上数字摘自计划书，假设期内没有提取及贷款。预期退保总额包括非保证的复归红利及终期分红，实际金额可能较所示者为高或低，在某些情况下非保证金额可能为零。本海报仅供参考，并非合约，详情请参阅完整计划书、产品简介及保单条款。',
+        empty:'请先上载计划书 PDF'}
+  };
+
+  async function parsePdf(file){
+    const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer(),
+      cMapUrl:'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',cMapPacked:true}).promise;
+    let head='',rows={},bad=0;
+    for(let p=1;p<=pdf.numPages;p++){
+      const page=await pdf.getPage(p);
+      const tc=await page.getTextContent();
+      const items=tc.items.filter(i=>i.str.trim()).map(i=>({s:i.str.trim(),x:i.transform[4],y:i.transform[5]}));
+      const flat=items.map(i=>i.s).join('').replace(/\s+/g,'');
+      if(p<=2) head+=flat;
+      if(!/详细说明|詳細說明/.test(flat)) continue;
+      // 按 y 座標分行，再按 x 排序，還原表格的欄位次序
+      items.sort((a,b)=>b.y-a.y||a.x-b.x);
+      const lines=[];
+      for(const it of items){
+        const last=lines[lines.length-1];
+        if(last&&Math.abs(last.y-it.y)<3) last.items.push(it); else lines.push({y:it.y,items:[it]});
+      }
+      for(const ln of lines){
+        const tk=ln.items.sort((a,b)=>a.x-b.x).flatMap(i=>i.s.split(/\s+/));
+        if(tk.length!==12||!tk.every(t=>/^[\d,]+$/.test(t))) continue;
+        const n=tk.map(num);
+        // 欄位：年度, 年齡, 已繳保費, 保證現金價值, 復歸紅利, 終期分紅, 退保總額, ...身故賠償
+        const r={year:n[0],age:n[1],paid:n[2],gcv:n[3],rb:n[4],tb:n[5],total:n[6]};
+        if(Math.abs(r.gcv+r.rb+r.tb-r.total)>3) bad++;
+        rows[r.year]=r;
+      }
+    }
+    const list=Object.values(rows).sort((a,b)=>a.year-b.year);
+    if(!list.length) throw new Error('找不到「詳細說明」表格，這份 PDF 的格式可能不同。');
+    let m=head.match(/建[议議][书書]摘要：(.+?（\d+年[缴繳][费費]）)/)||head.match(/([\u4e00-\u9fff]+(?:计划|計劃)（\d+年[缴繳][费費]）)/);
+    const plan=m?m[1].replace(/^.*有限公司/,''):'';
+    const pay=(plan.match(/（(\d+)年/)||[])[1]||'';
+    const sex=(head.match(/性[别別]：(男|女)/)||[])[1]||'';
+    const cur=(head.match(/[货貨][币幣]：(美元|港元|港[币幣]|人民[币幣]|澳[门門][币幣])/)||[])[1]||'';
+    return {plan,pay,sex,cur,rows,list,bad,
+      issueAge:list[0].age-list[0].year,
+      annual:list[0].paid,
+      totalPaid:Math.max(...list.map(r=>r.paid))};
+  }
+
+  function render(){
+    const t=L[$('lang').value],P=$('poster');
+    P.className=$('theme').value;
+    if(!data){P.innerHTML='<div class="spacer"></div><div style="text-align:center;opacity:.7">'+t.empty+'</div><div class="spacer"></div>';return;}
+    const ys=$('years').value.split(/[,，\s]+/).map(Number).filter(y=>data.rows[y]);
+    const body=ys.map(y=>{const r=data.rows[y];return `<tr>
+      <td>${t.nth(y)}<small>${r.age} ${t.age}</small></td>
+      <td>${fmt(r.gcv)}</td>
+      <td class="total">${fmt(r.total)}</td>
+      <td class="mult">${(r.total/data.totalPaid).toFixed(1)} ${t.times}</td></tr>`}).join('');
+    P.innerHTML=`
+      <div class="tag" contenteditable>${t.tag}</div>
+      <div class="headline" contenteditable>${data.pay} ${t.head}</div>
+      <div class="plan" contenteditable>${data.plan}</div>
+      <div class="chips">
+        <span class="chip" contenteditable>${t.insured}：${data.issueAge} ${t.age} ${data.sex}</span>
+        <span class="chip" contenteditable>${t.annual}：${fmt(data.annual)}</span>
+        <span class="chip" contenteditable>${t.pay} ${data.pay} ${t.yr}</span>
+        <span class="chip" contenteditable>${t.totalPaid}：${fmt(data.totalPaid)}</span>
+      </div>
+      <table><thead><tr><th>${t.c1}</th><th>${t.c2}</th><th>${t.c3}</th><th>${t.c4}</th></tr></thead>
+      <tbody contenteditable>${body}</tbody></table>
+      <div class="unit" contenteditable>${t.unit}${data.cur}</div>
+      <div class="spacer"></div>
+      <div class="agent" contenteditable>${$('agent').value}</div>
+      <div class="disc" contenteditable>${t.disc}</div>`;
+  }
+
+  $('pdfFile').onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    $('msg').className='';$('msg').textContent='讀取中…';
+    try{
+      data=await parsePdf(f);
+      const d=[10,20,30],a65=data.list.find(r=>r.age===65),a85=data.list.find(r=>r.age===85);
+      [a65,a85].forEach(r=>{if(r&&!d.includes(r.year))d.push(r.year)});
+      $('years').value=d.filter(y=>data.rows[y]).sort((a,b)=>a-b).join(',');
+      $('msg').className=data.bad?'err':'ok';
+      $('msg').textContent=data.bad
+        ?`已讀取 ${data.list.length} 個年度，但有 ${data.bad} 行數字對不上（保證＋紅利＋分紅≠總額），請仔細核對。`
+        :`已讀取 ${data.list.length} 個保單年度，數字已通過加總檢查。`;
+      $('dl').disabled=false;
+    }catch(err){data=null;$('dl').disabled=true;$('msg').className='err';$('msg').textContent='讀取失敗：'+err.message;}
+    render();
+  };
+  $('theme').onchange=()=>{$('bgWrap').style.display=$('theme').value==='t-custom'?'block':'none';
+    if($('theme').value!=='t-custom')$('poster').style.backgroundImage='';render();};
+  $('bgFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+    r.onload=()=>{$('poster').style.backgroundImage='url('+r.result+')'};r.readAsDataURL(f);};
+  ['years','lang','agent'].forEach(id=>$(id).onchange=render);
+  $('dl').onclick=async()=>{
+    const c=await html2canvas($('poster'),{scale:3,useCORS:true,backgroundColor:null});
+    const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download='poster_'+Date.now()+'.png';a.click();
+  };
+  render();
+  </script>
+  </body>
+  </html>
